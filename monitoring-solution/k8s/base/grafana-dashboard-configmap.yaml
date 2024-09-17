@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  labels:
+    grafana_dashboard: "1"
+data:
+  nginx-availability.json: |
+    {
+      "id": null,
+      "title": "HTTP Endpoint Availability",
+      "uid": "endpoint-availability",
+      "version": 1,
+      "schemaVersion": 16,
+      "panels": [
+        {
+          "type": "graph",
+          "title": "Endpoint Availability",
+          "targets": [
+            {
+              "expr": "probe_success{job=\"blackbox\"}",
+              "legendFormat": "{{ instance }}",
+              "refId": "A"
+            }
+          ]
+        }
+      ],
+      "templating": {
+        "list": [
+          {
+            "name": "instance",
+            "type": "query",
+            "datasource": "VictoriaMetrics",
+            "query": "label_values(probe_success{job=\"blackbox\"}, instance)"
+          }
+        ]
+      }
+    }

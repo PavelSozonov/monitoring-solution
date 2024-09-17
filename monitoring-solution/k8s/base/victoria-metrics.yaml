@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: victoria-metrics
+spec:
+  selector:
+    app: victoria-metrics
+  ports:
+    - port: 8428
+      targetPort: 8428
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: victoria-metrics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: victoria-metrics
+  template:
+    metadata:
+      labels:
+        app: victoria-metrics
+    spec:
+      containers:
+        - name: victoria-metrics
+          image: victoriametrics/victoria-metrics:latest
+          args:
+            - '--selfScrapeInterval=0'
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmagent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vmagent
+  template:
+    metadata:
+      labels:
+        app: vmagent
+    spec:
+      containers:
+        - name: vmagent
+          image: victoriametrics/vmagent:latest
+          args:
+            - '--promscrape.config=/etc/vmagent/vmagent.yaml'
+            - '--remoteWrite.url=http://victoria-metrics:8428/api/v1/write'
+            - '--rule=/etc/vmagent/rules.yaml'
+            - '--notifier.url=http://alertmanager:9093/'
+            - '--httpListenAddr=:8429'
+          volumeMounts:
+            - name: config
+              mountPath: /etc/vmagent
+            - name: rules
+              mountPath: /etc/vmagent/rules.yaml
+              subPath: rules.yaml
+        - name: config-reloader
+          image: jimmidyson/configmap-reload:v0.5.0
+          args:
+            - --volume-dir=/etc/vmagent
+            - --webhook-url=http://localhost:8429/-/reload
+          volumeMounts:
+            - name: config
+              mountPath: /etc/vmagent
+            - name: rules
+              mountPath: /etc/vmagent
+      volumes:
+        - name: config
+          configMap:
+            name: vmagent-scrape-config
+            items:
+              - key: vmagent.yaml
+                path: vmagent.yaml
+        - name: rules
+          configMap:
+            name: vmagent-rules
+            items:
+              - key: rules.yaml
+                path: rules.yaml
