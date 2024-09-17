@@ -7,11 +7,101 @@ set -e
 
 # Create the directory structure
 echo "Creating directory structure..."
-mkdir -p monitoring-solution/k8s/base
-mkdir -p monitoring-solution/k8s/overlays/local
-mkdir -p monitoring-solution/k8s/overlays/production
+mkdir -p k8s/base
+mkdir -p k8s/overlays/local
+mkdir -p k8s/overlays/production
+mkdir -p kind
 
-cd monitoring-solution
+# Create kind cluster configuration
+echo "Creating kind cluster configuration..."
+cat <<EOF > kind/kind-config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+containerdConfigPatches:
+  - |
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
+      endpoint = ["https://dockerhub.timeweb.cloud"]
+EOF
+
+# Create script to create kind cluster
+echo "Creating create_kind_cluster.sh script..."
+cat <<'EOF' > kind/create_kind_cluster.sh
+#!/bin/bash
+
+# create_kind_cluster.sh - Script to create a kind cluster with Docker Hub mirror
+
+# Exit immediately if a command exits with a non-zero status
+set -e
+
+# Function to check if kind is installed
+function check_kind_installed {
+    if ! command -v kind &> /dev/null
+    then
+        echo "kind could not be found. Please install kind before running this script."
+        exit 1
+    fi
+}
+
+# Check prerequisites
+check_kind_installed
+
+# Check if kind cluster already exists
+if kind get clusters | grep -q "^kind$"; then
+    echo "Kind cluster 'kind' already exists. Skipping creation."
+else
+    # Create kind cluster
+    echo "Creating kind cluster..."
+    kind create cluster --config kind/kind-config.yaml
+    echo "Kind cluster created successfully."
+fi
+EOF
+
+# Make the create_kind_cluster.sh script executable
+chmod +x kind/create_kind_cluster.sh
+
+# Create script to delete kind cluster
+echo "Creating delete_kind_cluster.sh script..."
+cat <<'EOF' > kind/delete_kind_cluster.sh
+#!/bin/bash
+
+# delete_kind_cluster.sh - Script to delete the kind cluster
+
+# Exit immediately if a command exits with a non-zero status
+set -e
+
+# Function to check if kind is installed
+function check_kind_installed {
+    if ! command -v kind &> /dev/null
+    then
+        echo "kind could not be found. Please install kind before running this script."
+        exit 1
+        fi
+}
+
+# Check prerequisites
+check_kind_installed
+
+# Check if kind cluster exists
+if kind get clusters | grep -q "^kind$"; then
+    echo "Deleting kind cluster..."
+    kind delete cluster
+    echo "Kind cluster deleted successfully."
+else
+    echo "Kind cluster 'kind' does not exist. Nothing to delete."
+fi
+EOF
+
+# Make the delete_kind_cluster.sh script executable
+chmod +x kind/delete_kind_cluster.sh
+
+# Create the observability namespace manifest
+echo "Creating namespace.yaml..."
+cat <<EOF > k8s/base/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+EOF
 
 # Create nginx deployment and service
 echo "Creating nginx.yaml..."
@@ -20,6 +110,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nginx
+  namespace: observability
 spec:
   replicas: 1
   selector:
@@ -40,6 +131,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: nginx
+  namespace: observability
 spec:
   selector:
     app: nginx
@@ -56,6 +148,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: blackbox-exporter
+  namespace: observability
 spec:
   selector:
     app: blackbox-exporter
@@ -68,6 +161,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: blackbox-exporter
+  namespace: observability
 spec:
   replicas: 1
   selector:
@@ -110,6 +204,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: blackbox-exporter-config
+  namespace: observability
 data:
   config.yml: |
     modules:
@@ -128,6 +223,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: victoria-metrics
+  namespace: observability
 spec:
   selector:
     app: victoria-metrics
@@ -140,6 +236,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: victoria-metrics
+  namespace: observability
 spec:
   replicas: 1
   selector:
@@ -158,13 +255,13 @@ spec:
 EOF
 
 # Create VMAgent deployment
-echo "Creating vmagent deployment in victoria-metrics.yaml..."
-cat <<EOF >> k8s/base/victoria-metrics.yaml
----
+echo "Creating vmagent deployment..."
+cat <<EOF > k8s/base/vmagent.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: vmagent
+  namespace: observability
 spec:
   replicas: 1
   selector:
@@ -181,15 +278,10 @@ spec:
           args:
             - '--promscrape.config=/etc/vmagent/vmagent.yaml'
             - '--remoteWrite.url=http://victoria-metrics:8428/api/v1/write'
-            - '--rule=/etc/vmagent/rules.yaml'
-            - '--notifier.url=http://alertmanager:9093/'
             - '--httpListenAddr=:8429'
           volumeMounts:
             - name: config
               mountPath: /etc/vmagent
-            - name: rules
-              mountPath: /etc/vmagent/rules.yaml
-              subPath: rules.yaml
         - name: config-reloader
           image: jimmidyson/configmap-reload:v0.5.0
           args:
@@ -205,12 +297,6 @@ spec:
             items:
               - key: vmagent.yaml
                 path: vmagent.yaml
-        - name: rules
-          configMap:
-            name: vmagent-rules
-            items:
-              - key: rules.yaml
-                path: rules.yaml
 EOF
 
 # Create ConfigMap for VMAgent scrape configurations
@@ -220,11 +306,11 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: vmagent-scrape-config
+  namespace: observability
 data:
   vmagent.yaml: |
     global:
       scrape_interval: 15s
-      evaluation_interval: 15s
     scrape_configs:
       - job_name: 'blackbox'
         metrics_path: /probe
@@ -232,25 +318,72 @@ data:
           module: [http_2xx]
         static_configs:
           - targets:
-              - http://nginx:80
+              - http://nginx.observability.svc.cluster.local
               # Add more endpoints here
               # - http://example.com
         relabel_configs:
           - source_labels: [__address__]
             target_label: __param_target
           - target_label: __address__
-            replacement: blackbox-exporter:9115
+            replacement: blackbox-exporter.observability.svc.cluster.local:9115
           - source_labels: [__param_target]
             target_label: instance
 EOF
 
-# Create ConfigMap for VMAgent alerting rules
-echo "Creating vmagent-rules-config.yaml..."
-cat <<EOF > k8s/base/vmagent-rules-config.yaml
+# Create VMalert deployment
+echo "Creating vmalert deployment..."
+cat <<EOF > k8s/base/vmalert.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmalert
+  namespace: observability
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vmalert
+  template:
+    metadata:
+      labels:
+        app: vmalert
+    spec:
+      containers:
+        - name: vmalert
+          image: victoriametrics/vmalert:latest
+          args:
+            - '--rule=/etc/vmalert/rules.yaml'
+            - '--datasource.url=http://victoria-metrics.observability.svc.cluster.local:8428'
+            - '--notifier.url=http://alertmanager.observability.svc.cluster.local:9093/'
+            - '--httpListenAddr=:8880'
+          volumeMounts:
+            - name: config
+              mountPath: /etc/vmalert
+        - name: config-reloader
+          image: jimmidyson/configmap-reload:v0.5.0
+          args:
+            - --volume-dir=/etc/vmalert
+            - --webhook-url=http://localhost:8880/-/reload
+          volumeMounts:
+            - name: config
+              mountPath: /etc/vmalert
+      volumes:
+        - name: config
+          configMap:
+            name: vmalert-rules
+            items:
+              - key: rules.yaml
+                path: rules.yaml
+EOF
+
+# Create ConfigMap for VMalert alerting rules
+echo "Creating vmalert-rules-config.yaml..."
+cat <<EOF > k8s/base/vmalert-rules-config.yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: vmagent-rules
+  name: vmalert-rules
+  namespace: observability
 data:
   rules.yaml: |
     groups:
@@ -273,6 +406,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: grafana
+  namespace: observability
 spec:
   selector:
     app: grafana
@@ -285,6 +419,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: grafana
+  namespace: observability
 spec:
   replicas: 1
   selector:
@@ -329,6 +464,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-datasources
+  namespace: observability
   labels:
     grafana_datasource: "1"
 data:
@@ -338,7 +474,7 @@ data:
       - name: VictoriaMetrics
         type: prometheus
         access: proxy
-        url: http://victoria-metrics:8428
+        url: http://victoria-metrics.observability.svc.cluster.local:8428
         isDefault: true
 EOF
 
@@ -349,6 +485,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-dashboards
+  namespace: observability
   labels:
     grafana_dashboard: "1"
 data:
@@ -392,6 +529,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-dashboard-provisioning
+  namespace: observability
 data:
   dashboards.yaml: |
     apiVersion: 1
@@ -413,6 +551,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: alertmanager
+  namespace: observability
 spec:
   selector:
     app: alertmanager
@@ -425,6 +564,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: alertmanager
+  namespace: observability
 spec:
   replicas: 1
   selector:
@@ -456,10 +596,11 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: alertmanager-config
+  namespace: observability
 data:
   config.yml: |
     global:
-      smtp_smarthost: 'mailhog:1025'
+      smtp_smarthost: 'mailhog.observability.svc.cluster.local:1025'
       smtp_from: 'alertmanager@example.com'
     route:
       receiver: 'email-alert'
@@ -467,11 +608,6 @@ data:
       - name: 'email-alert'
         email_configs:
           - to: 'user@example.com'
-            # Uncomment and set your real email configurations here
-            # smtp_smarthost: 'smtp.example.com:587'
-            # smtp_from: 'alertmanager@example.com'
-            # auth_username: 'your-username'
-            # auth_password: 'your-password'
 EOF
 
 # Create MailHog deployment and service
@@ -481,6 +617,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: mailhog
+  namespace: observability
 spec:
   selector:
     app: mailhog
@@ -496,6 +633,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mailhog
+  namespace: observability
 spec:
   replicas: 1
   selector:
@@ -518,12 +656,15 @@ EOF
 echo "Creating kustomization.yaml in base..."
 cat <<EOF > k8s/base/kustomization.yaml
 resources:
+  - namespace.yaml
   - nginx.yaml
   - blackbox-exporter.yaml
   - blackbox-exporter-configmap.yaml
   - victoria-metrics.yaml
+  - vmagent.yaml
   - vmagent-scrape-config.yaml
-  - vmagent-rules-config.yaml
+  - vmalert.yaml
+  - vmalert-rules-config.yaml
   - grafana.yaml
   - grafana-datasources.yaml
   - grafana-dashboard-configmap.yaml
@@ -538,6 +679,7 @@ echo "Creating kustomization.yaml in overlays/local..."
 cat <<EOF > k8s/overlays/local/kustomization.yaml
 resources:
   - ../../base
+namespace: observability
 EOF
 
 # Create kustomization.yaml in overlays/production
@@ -545,6 +687,7 @@ echo "Creating kustomization.yaml in overlays/production..."
 cat <<EOF > k8s/overlays/production/kustomization.yaml
 resources:
   - ../../base
+namespace: observability
 EOF
 
 # Create skaffold.yaml
@@ -570,6 +713,7 @@ This project sets up a scalable monitoring solution for HTTP endpoints using Kub
 - **nginx**: A demo web service.
 - **Blackbox Exporter**: Probes HTTP endpoints.
 - **VMAgent**: Scrapes metrics and sends them to VictoriaMetrics.
+- **VMAlert**: Evaluates alerting rules and sends alerts to Alertmanager.
 - **VictoriaMetrics**: Time-series database for metrics.
 - **Grafana**: Visualization of metrics.
 - **Alertmanager**: Handles alerts.
@@ -582,28 +726,49 @@ This project sets up a scalable monitoring solution for HTTP endpoints using Kub
 - **Kubectl**: To interact with the cluster.
 - **Docker**: For building images.
 
-## Running Locally
+## Setting Up the Kind Cluster
 
-1. **Start the kind cluster** (if not already running).
-2. **Run Skaffold**:
+Navigate to the \`kind\` directory and run the \`create_kind_cluster.sh\` script to create a kind cluster configured with the Docker Hub mirror \`https://dockerhub.timeweb.cloud\`.
+
+\`\`\`bash
+cd kind
+./create_kind_cluster.sh
+cd ..
+\`\`\`
+
+## Deleting the Kind Cluster
+
+To delete the kind cluster, run the \`delete_kind_cluster.sh\` script:
+
+\`\`\`bash
+cd kind
+./delete_kind_cluster.sh
+cd ..
+\`\`\`
+
+## Deploying the Monitoring Solution
+
+Deploy the monitoring solution using Skaffold:
+
+\`\`\`bash
+skaffold dev
+\`\`\`
+
+## Accessing the Applications
+
+1. **Access Grafana**:
 
    \`\`\`bash
-   skaffold dev
-   \`\`\`
-
-3. **Access Grafana**:
-
-   \`\`\`bash
-   kubectl port-forward svc/grafana 3000:3000
+   kubectl port-forward svc/grafana -n observability 3000:3000
    \`\`\`
 
    - Open [http://localhost:3000](http://localhost:3000) in your browser.
    - Login with username: \`admin\`, password: \`admin\`.
 
-4. **Access MailHog**:
+2. **Access MailHog**:
 
    \`\`\`bash
-   kubectl port-forward svc/mailhog 8025:8025
+   kubectl port-forward svc/mailhog -n observability 8025:8025
    \`\`\`
 
    - Open [http://localhost:8025](http://localhost:8025) in your browser.
@@ -611,14 +776,14 @@ This project sets up a scalable monitoring solution for HTTP endpoints using Kub
 ## Monitoring Multiple Endpoints
 
 - **Add Endpoints**: Edit \`k8s/base/vmagent-scrape-config.yaml\` and add your endpoints under \`static_configs\`.
-- **Apply Changes**: Since we're using Skaffold, changes will be automatically applied.
+- **Apply Changes**: Changes will be automatically applied due to the \`config-reloader\`.
 
 ## Testing Alerts
 
 - **Scale Down nginx**:
 
   \`\`\`bash
-  kubectl scale deployment nginx --replicas=0
+  kubectl scale deployment nginx -n observability --replicas=0
   \`\`\`
 
 - **Check MailHog**: An alert email should appear in MailHog.
@@ -633,9 +798,11 @@ This project sets up a scalable monitoring solution for HTTP endpoints using Kub
 
 ## Notes
 
+- **Namespace**: All resources are deployed in the \`observability\` namespace.
 - **Configurations**: All configurations are managed via ConfigMaps.
 - **Reloading Configs**: Changes to ConfigMaps are automatically reloaded thanks to the \`config-reloader\` sidecars.
 - **Persistent Storage**: For production use, consider adding PersistentVolumeClaims.
+
 EOF
 
 echo "Setup complete!"

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: observability
+data:
+  config.yml: |
+    global:
+      smtp_smarthost: 'mailhog.observability.svc.cluster.local:1025'
+      smtp_from: 'alertmanager@example.com'
+    route:
+      receiver: 'email-alert'
+    receivers:
+      - name: 'email-alert'
+        email_configs:
+          - to: 'user@example.com'

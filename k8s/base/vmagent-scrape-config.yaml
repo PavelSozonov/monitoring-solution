@@ -2,11 +2,11 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: vmagent-scrape-config
+  namespace: observability
 data:
   vmagent.yaml: |
     global:
       scrape_interval: 15s
-      evaluation_interval: 15s
     scrape_configs:
       - job_name: 'blackbox'
         metrics_path: /probe
@@ -14,13 +14,13 @@ data:
           module: [http_2xx]
         static_configs:
           - targets:
-              - http://nginx:80
+              - http://nginx.observability.svc.cluster.local
               # Add more endpoints here
               # - http://example.com
         relabel_configs:
           - source_labels: [__address__]
             target_label: __param_target
           - target_label: __address__
-            replacement: blackbox-exporter:9115
+            replacement: blackbox-exporter.observability.svc.cluster.local:9115
           - source_labels: [__param_target]
             target_label: instance

@@ -7,6 +7,7 @@ This project sets up a scalable monitoring solution for HTTP endpoints using Kub
 - **nginx**: A demo web service.
 - **Blackbox Exporter**: Probes HTTP endpoints.
 - **VMAgent**: Scrapes metrics and sends them to VictoriaMetrics.
+- **VMAlert**: Evaluates alerting rules and sends alerts to Alertmanager.
 - **VictoriaMetrics**: Time-series database for metrics.
 - **Grafana**: Visualization of metrics.
 - **Alertmanager**: Handles alerts.
@@ -19,28 +20,49 @@ This project sets up a scalable monitoring solution for HTTP endpoints using Kub
 - **Kubectl**: To interact with the cluster.
 - **Docker**: For building images.
 
-## Running Locally
+## Setting Up the Kind Cluster
 
-1. **Start the kind cluster** (if not already running).
-2. **Run Skaffold**:
+Navigate to the `kind` directory and run the `create_kind_cluster.sh` script to create a kind cluster configured with the Docker Hub mirror `https://dockerhub.timeweb.cloud`.
+
+```bash
+cd kind
+./create_kind_cluster.sh
+cd ..
+```
+
+## Deleting the Kind Cluster
+
+To delete the kind cluster, run the `delete_kind_cluster.sh` script:
+
+```bash
+cd kind
+./delete_kind_cluster.sh
+cd ..
+```
+
+## Deploying the Monitoring Solution
+
+Deploy the monitoring solution using Skaffold:
+
+```bash
+skaffold dev
+```
+
+## Accessing the Applications
+
+1. **Access Grafana**:
 
    ```bash
-   skaffold dev
-   ```
-
-3. **Access Grafana**:
-
-   ```bash
-   kubectl port-forward svc/grafana 3000:3000
+   kubectl port-forward svc/grafana -n observability 3000:3000
    ```
 
    - Open [http://localhost:3000](http://localhost:3000) in your browser.
    - Login with username: `admin`, password: `admin`.
 
-4. **Access MailHog**:
+2. **Access MailHog**:
 
    ```bash
-   kubectl port-forward svc/mailhog 8025:8025
+   kubectl port-forward svc/mailhog -n observability 8025:8025
    ```
 
    - Open [http://localhost:8025](http://localhost:8025) in your browser.
@@ -48,14 +70,14 @@ This project sets up a scalable monitoring solution for HTTP endpoints using Kub
 ## Monitoring Multiple Endpoints
 
 - **Add Endpoints**: Edit `k8s/base/vmagent-scrape-config.yaml` and add your endpoints under `static_configs`.
-- **Apply Changes**: Since we're using Skaffold, changes will be automatically applied.
+- **Apply Changes**: Changes will be automatically applied due to the `config-reloader`.
 
 ## Testing Alerts
 
 - **Scale Down nginx**:
 
   ```bash
-  kubectl scale deployment nginx --replicas=0
+  kubectl scale deployment nginx -n observability --replicas=0
   ```
 
 - **Check MailHog**: An alert email should appear in MailHog.
@@ -70,6 +92,8 @@ This project sets up a scalable monitoring solution for HTTP endpoints using Kub
 
 ## Notes
 
+- **Namespace**: All resources are deployed in the `observability` namespace.
 - **Configurations**: All configurations are managed via ConfigMaps.
 - **Reloading Configs**: Changes to ConfigMaps are automatically reloaded thanks to the `config-reloader` sidecars.
 - **Persistent Storage**: For production use, consider adding PersistentVolumeClaims.
+

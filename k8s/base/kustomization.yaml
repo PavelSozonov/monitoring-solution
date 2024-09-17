@@ -1,10 +1,13 @@
 resources:
+  - namespace.yaml
   - nginx.yaml
   - blackbox-exporter.yaml
   - blackbox-exporter-configmap.yaml
   - victoria-metrics.yaml
+  - vmagent.yaml
   - vmagent-scrape-config.yaml
-  - vmagent-rules-config.yaml
+  - vmalert.yaml
+  - vmalert-rules-config.yaml
   - grafana.yaml
   - grafana-datasources.yaml
   - grafana-dashboard-configmap.yaml

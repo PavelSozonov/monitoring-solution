@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmalert
+  namespace: observability
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vmalert
+  template:
+    metadata:
+      labels:
+        app: vmalert
+    spec:
+      containers:
+        - name: vmalert
+          image: victoriametrics/vmalert:latest
+          args:
+            - '--rule=/etc/vmalert/rules.yaml'
+            - '--datasource.url=http://victoria-metrics.observability.svc.cluster.local:8428'
+            - '--notifier.url=http://alertmanager.observability.svc.cluster.local:9093/'
+            - '--httpListenAddr=:8880'
+          volumeMounts:
+            - name: config
+              mountPath: /etc/vmalert
+        - name: config-reloader
+          image: jimmidyson/configmap-reload:v0.5.0
+          args:
+            - --volume-dir=/etc/vmalert
+            - --webhook-url=http://localhost:8880/-/reload
+          volumeMounts:
+            - name: config
+              mountPath: /etc/vmalert
+      volumes:
+        - name: config
+          configMap:
+            name: vmalert-rules
+            items:
+              - key: rules.yaml
+                path: rules.yaml

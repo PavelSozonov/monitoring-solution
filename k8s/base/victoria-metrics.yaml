@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: victoria-metrics
+  namespace: observability
+spec:
+  selector:
+    app: victoria-metrics
+  ports:
+    - port: 8428
+      targetPort: 8428
+      name: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: victoria-metrics
+  namespace: observability
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: victoria-metrics
+  template:
+    metadata:
+      labels:
+        app: victoria-metrics
+    spec:
+      containers:
+        - name: victoria-metrics
+          image: victoriametrics/victoria-metrics:latest
+          args:
+            - '--selfScrapeInterval=0'
