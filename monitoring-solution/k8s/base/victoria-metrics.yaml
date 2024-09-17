@@ -8,6 +8,7 @@ spec:
   ports:
     - port: 8428
       targetPort: 8428
+      name: http
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -65,8 +66,6 @@ spec:
             - --webhook-url=http://localhost:8429/-/reload
           volumeMounts:
             - name: config
-              mountPath: /etc/vmagent
-            - name: rules
               mountPath: /etc/vmagent
       volumes:
         - name: config

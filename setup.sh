@@ -62,6 +62,7 @@ spec:
   ports:
     - port: 9115
       targetPort: 9115
+      name: http
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -133,6 +134,7 @@ spec:
   ports:
     - port: 8428
       targetPort: 8428
+      name: http
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -195,8 +197,6 @@ spec:
             - --webhook-url=http://localhost:8429/-/reload
           volumeMounts:
             - name: config
-              mountPath: /etc/vmagent
-            - name: rules
               mountPath: /etc/vmagent
       volumes:
         - name: config
@@ -279,6 +279,7 @@ spec:
   ports:
     - port: 3000
       targetPort: 3000
+      name: http
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -418,6 +419,7 @@ spec:
   ports:
     - port: 9093
       targetPort: 9093
+      name: http
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -483,9 +485,11 @@ spec:
   selector:
     app: mailhog
   ports:
-    - port: 8025
+    - name: http
+      port: 8025
       targetPort: 8025
-    - port: 1025
+    - name: smtp
+      port: 1025
       targetPort: 1025
 ---
 apiVersion: apps/v1
@@ -632,7 +636,6 @@ This project sets up a scalable monitoring solution for HTTP endpoints using Kub
 - **Configurations**: All configurations are managed via ConfigMaps.
 - **Reloading Configs**: Changes to ConfigMaps are automatically reloaded thanks to the \`config-reloader\` sidecars.
 - **Persistent Storage**: For production use, consider adding PersistentVolumeClaims.
-
 EOF
 
 echo "Setup complete!"

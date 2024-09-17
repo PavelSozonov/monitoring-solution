@@ -6,9 +6,11 @@ spec:
   selector:
     app: mailhog
   ports:
-    - port: 8025
+    - name: http
+      port: 8025
       targetPort: 8025
-    - port: 1025
+    - name: smtp
+      port: 1025
       targetPort: 1025
 ---
 apiVersion: apps/v1
