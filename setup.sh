@@ -608,6 +608,7 @@ data:
       - name: 'email-alert'
         email_configs:
           - to: 'user@example.com'
+            require_tls: false
 EOF
 
 # Create MailHog deployment and service
