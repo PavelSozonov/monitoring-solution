@@ -15,6 +15,7 @@ data:
         static_configs:
           - targets:
               - http://nginx.observability.svc.cluster.local
+              - http://nginx2.observability.svc.cluster.local  # Added nginx2
               # Add more endpoints here
               # - http://example.com
         relabel_configs:

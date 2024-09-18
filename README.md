@@ -5,13 +5,14 @@ This project sets up a scalable monitoring solution for HTTP endpoints using Kub
 ## Components
 
 - **nginx**: A demo web service.
+- **nginx2**: An additional demo web service.
 - **Blackbox Exporter**: Probes HTTP endpoints.
 - **VMAgent**: Scrapes metrics and sends them to VictoriaMetrics.
 - **VMAlert**: Evaluates alerting rules and sends alerts to Alertmanager.
 - **VictoriaMetrics**: Time-series database for metrics.
 - **Grafana**: Visualization of metrics.
 - **Alertmanager**: Handles alerts.
-- **MailHog**: Mock SMTP server for testing alerts.
+- **MailHog**: Mock SMTP server for testing alerts (data is not persisted).
 
 ## Prerequisites
 
@@ -67,6 +68,14 @@ skaffold dev
 
    - Open [http://localhost:8025](http://localhost:8025) in your browser.
 
+3. **Access Nginx2** (Optional):
+
+   ```bash
+   kubectl port-forward svc/nginx2 -n observability 8081:80
+   ```
+
+   - Open [http://localhost:8081](http://localhost:8081) in your browser.
+
 ## Monitoring Multiple Endpoints
 
 - **Add Endpoints**: Edit `k8s/base/vmagent-scrape-config.yaml` and add your endpoints under `static_configs`.
@@ -74,10 +83,10 @@ skaffold dev
 
 ## Testing Alerts
 
-- **Scale Down nginx**:
+- **Scale Down nginx2**:
 
   ```bash
-  kubectl scale deployment nginx -n observability --replicas=0
+  kubectl scale deployment nginx2 -n observability --replicas=0
   ```
 
 - **Check MailHog**: An alert email should appear in MailHog.
@@ -95,5 +104,11 @@ skaffold dev
 - **Namespace**: All resources are deployed in the `observability` namespace.
 - **Configurations**: All configurations are managed via ConfigMaps.
 - **Reloading Configs**: Changes to ConfigMaps are automatically reloaded thanks to the `config-reloader` sidecars.
-- **Persistent Storage**: For production use, consider adding PersistentVolumeClaims.
+- **Timezone Configuration**: All components are configured to operate in the Moscow timezone (`Europe/Moscow`).
+- **Persistent Storage**:
+  - VictoriaMetrics uses a PersistentVolumeClaim limited to 5 GB.
+  - **MailHog data is not persisted**; emails will not survive pod restarts.
+- **Security Considerations**:
+  - **TLS in Alertmanager**: Currently, TLS is disabled for SMTP to work with MailHog. Ensure TLS is enabled in production environments.
+  - **Admin Password**: The default Grafana admin password is set to `admin`. Change this in production for security.
 

@@ -31,9 +31,15 @@ spec:
           image: prom/blackbox-exporter:latest
           args:
             - '--config.file=/etc/blackbox_exporter/config.yml'
+          env:
+            - name: TZ
+              value: "Europe/Moscow"
           volumeMounts:
             - name: config
               mountPath: /etc/blackbox_exporter
+            - name: tz-config
+              mountPath: /etc/localtime
+              readOnly: true
         - name: config-reloader
           image: jimmidyson/configmap-reload:v0.5.0
           args:
@@ -49,3 +55,7 @@ spec:
             items:
               - key: config.yml
                 path: config.yml
+        - name: tz-config
+          hostPath:
+            path: /usr/share/zoneinfo/Europe/Moscow
+            type: File

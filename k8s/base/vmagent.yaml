@@ -20,9 +20,15 @@ spec:
             - '--promscrape.config=/etc/vmagent/vmagent.yaml'
             - '--remoteWrite.url=http://victoria-metrics:8428/api/v1/write'
             - '--httpListenAddr=:8429'
+          env:
+            - name: TZ
+              value: "Europe/Moscow"
           volumeMounts:
             - name: config
               mountPath: /etc/vmagent
+            - name: tz-config
+              mountPath: /etc/localtime
+              readOnly: true
         - name: config-reloader
           image: jimmidyson/configmap-reload:v0.5.0
           args:
@@ -38,3 +44,7 @@ spec:
             items:
               - key: vmagent.yaml
                 path: vmagent.yaml
+        - name: tz-config
+          hostPath:
+            path: /usr/share/zoneinfo/Europe/Moscow
+            type: File

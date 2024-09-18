@@ -11,7 +11,7 @@ function check_kind_installed {
     then
         echo "kind could not be found. Please install kind before running this script."
         exit 1
-        fi
+    fi
 }
 
 # Check prerequisites

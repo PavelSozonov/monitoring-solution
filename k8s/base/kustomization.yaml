@@ -1,8 +1,10 @@
 resources:
   - namespace.yaml
   - nginx.yaml
+  - nginx2.yaml
   - blackbox-exporter.yaml
   - blackbox-exporter-configmap.yaml
+  - victoria-metrics-pvc.yaml     # Added PVC resource
   - victoria-metrics.yaml
   - vmagent.yaml
   - vmagent-scrape-config.yaml

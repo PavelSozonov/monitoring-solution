@@ -13,6 +13,7 @@ data:
       "uid": "endpoint-availability",
       "version": 1,
       "schemaVersion": 16,
+      "timezone": "Europe/Moscow",
       "panels": [
         {
           "type": "graph",

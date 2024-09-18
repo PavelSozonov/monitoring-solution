@@ -31,10 +31,20 @@ spec:
           image: prom/alertmanager:latest
           args:
             - '--config.file=/etc/alertmanager/config.yml'
+          env:
+            - name: TZ
+              value: "Europe/Moscow"
           volumeMounts:
             - name: config
               mountPath: /etc/alertmanager
+            - name: tz-config
+              mountPath: /etc/localtime
+              readOnly: true
       volumes:
         - name: config
           configMap:
             name: alertmanager-config
+        - name: tz-config
+          hostPath:
+            path: /usr/share/zoneinfo/Europe/Moscow
+            type: File

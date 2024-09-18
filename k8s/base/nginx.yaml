@@ -18,6 +18,19 @@ spec:
           image: nginx:stable
           ports:
             - containerPort: 80
+          env:
+            - name: TZ
+              value: "Europe/Moscow"
+            
+          volumeMounts:
+            - name: tz-config
+              mountPath: /etc/localtime
+              readOnly: true
+      volumes:
+        - name: tz-config
+          hostPath:
+            path: /usr/share/zoneinfo/Europe/Moscow
+            type: File
 ---
 apiVersion: v1
 kind: Service

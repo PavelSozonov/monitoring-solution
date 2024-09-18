@@ -14,4 +14,4 @@ data:
       - name: 'email-alert'
         email_configs:
           - to: 'user@example.com'
-            require_tls: false
+            require_tls: false  # Disabled TLS requirement for MailHog

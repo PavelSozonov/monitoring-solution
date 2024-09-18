@@ -21,9 +21,15 @@ spec:
             - '--datasource.url=http://victoria-metrics.observability.svc.cluster.local:8428'
             - '--notifier.url=http://alertmanager.observability.svc.cluster.local:9093/'
             - '--httpListenAddr=:8880'
+          env:
+            - name: TZ
+              value: "Europe/Moscow"
           volumeMounts:
             - name: config
               mountPath: /etc/vmalert
+            - name: tz-config
+              mountPath: /etc/localtime
+              readOnly: true
         - name: config-reloader
           image: jimmidyson/configmap-reload:v0.5.0
           args:
@@ -39,3 +45,7 @@ spec:
             items:
               - key: rules.yaml
                 path: rules.yaml
+        - name: tz-config
+          hostPath:
+            path: /usr/share/zoneinfo/Europe/Moscow
+            type: File

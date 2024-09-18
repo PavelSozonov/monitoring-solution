@@ -34,6 +34,10 @@ spec:
           env:
             - name: GF_SECURITY_ADMIN_PASSWORD
               value: "admin"
+            - name: GF_SERVER_TIMEZONE
+              value: "Europe/Moscow"  # Set timezone to Moscow
+            - name: TZ
+              value: "Europe/Moscow"
           volumeMounts:
             - name: grafana-datasources
               mountPath: /etc/grafana/provisioning/datasources
@@ -41,6 +45,9 @@ spec:
               mountPath: /var/lib/grafana/dashboards
             - name: grafana-dashboard-provisioning
               mountPath: /etc/grafana/provisioning/dashboards
+            - name: tz-config
+              mountPath: /etc/localtime
+              readOnly: true
       volumes:
         - name: grafana-datasources
           configMap:
@@ -51,3 +58,7 @@ spec:
         - name: grafana-dashboard-provisioning
           configMap:
             name: grafana-dashboard-provisioning
+        - name: tz-config
+          hostPath:
+            path: /usr/share/zoneinfo/Europe/Moscow
+            type: File

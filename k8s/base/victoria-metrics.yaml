@@ -31,3 +31,22 @@ spec:
           image: victoriametrics/victoria-metrics:latest
           args:
             - '--selfScrapeInterval=0'
+            - '--storageDataPath=/victoria-metrics-data'   # Specify storage path
+            - '--retentionPeriod=30d'                      # Retain data for 30 days
+          env:
+            - name: TZ
+              value: "Europe/Moscow"
+          volumeMounts:
+            - name: victoria-metrics-storage
+              mountPath: /victoria-metrics-data           # Mount storage volume
+            - name: tz-config
+              mountPath: /etc/localtime
+              readOnly: true
+      volumes:
+        - name: victoria-metrics-storage
+          persistentVolumeClaim:
+            claimName: victoria-metrics-pvc
+        - name: tz-config
+          hostPath:
+            path: /usr/share/zoneinfo/Europe/Moscow
+            type: File
